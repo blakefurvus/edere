@@ -1,5 +1,18 @@
 #include "gui.h"
 
+#define GUI_TEXT_DEFAULT { \
+    NULL, "JetBrainsMono-Regular.ttf", 13, {0, 0, 0} \
+}
+
+#define GUI_DISPLAY_DEFAULT { \
+    'f', {0, 0, 0, 0}, 'c' \
+}
+
+#define GUI_STYLE_DEFAULT { \
+    GUI_TEXT_DEFAULT, \
+    GUI_DISPLAY_DEFAULT \
+}
+
 struct gui_state_t {
 
     // Library specific things
@@ -11,17 +24,37 @@ struct gui_state_t {
         int height;
     } app;
 
-    // Event state
+    // Events
     struct {
         int x;
         int y;
         bool is_down;
     } mouse;
 
-    // Styling state
-    struct {
-        TTF_Font *font;
-        SDL_Color color;
+    // Styling
+    struct gui_style_t {
+
+        // Text
+        struct gui_text_t {
+            TTF_Font *_font;
+            char *family;
+            int size;
+            SDL_Color color;
+        } text;
+
+        // Display
+        struct gui_display_t {
+            // Type
+            char type;
+
+            // Flex
+            SDL_Rect frame;
+            char direction;
+
+            // Fixed
+            SDL_Rect position;
+        } display;
+
     } style;
 
     // UI state
@@ -32,18 +65,80 @@ struct gui_state_t {
 } gui = {
     {NULL, NULL, false, 800, 600},
     {0, 0, false},
-    {NULL, {0, 0, 0}},
+    GUI_STYLE_DEFAULT,
     {0}
 };
 
+// Helper functions
+void push_frame(int x, int y)
+{
+    if (gui.style.display.type == 'f') {
+        if (gui.style.display.direction == 'r')
+            gui.style.display.frame.x += x;
+        else if (gui.style.display.direction == 'c')
+            gui.style.display.frame.y += y;
+    }
+}
+bool reset_text() {
+    // Reset to defaults
+    if (gui.style.text._font)
+        TTF_CloseFont(gui.style.text._font);
+    gui.style.text = (struct gui_text_t)GUI_TEXT_DEFAULT;
+
+    // Load
+    gui.style.text._font = TTF_OpenFont(
+        gui.style.text.family, gui.style.text.size
+    );
+
+    // Check
+    if (!gui.style.text._font) {
+        puts("Failed to load font");
+        return false;
+    }
+    return true;
+}
+void reset_display()
+{
+    // Reset to defaults
+    gui.style.display.type = 'f';
+    gui.style.display.position = (SDL_Rect){0, 0, 0, 0};
+}
+bool region_hit(int w, int h)
+{
+    // Get x and y depending on display type
+    int x =
+        gui.style.display.type == 'f'
+            ? gui.style.display.frame.x
+            : gui.style.display.position.x;
+    int y =
+        gui.style.display.type == 'f'
+            ? gui.style.display.frame.x
+            : gui.style.display.position.y;
+
+    // Check if mouse hits
+    if (gui.mouse.x < x ||
+        gui.mouse.y < y ||
+        gui.mouse.x >= x + w ||
+        gui.mouse.y >= y + h)
+        return false;
+    return true;
+}
+float p5map(float n, float start1, float stop1, float start2, float stop2)
+{
+    return ((n - start1) / (stop1 - start1)) * (stop2 - start2) + start2;
+}
 
 bool gui_init()
 {
-    if (SDL_Init(SDL_INIT_VIDEO) < 0)
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        puts("Failed to initialize SDL");
         return false;
+    }
 
-    if (TTF_Init() < 0)
+    if (TTF_Init() < 0) {
+        puts("Failed to initialize TTF");
         return false;
+    }
 
     gui.app.window = SDL_CreateWindow(
         "Edere",
@@ -51,12 +146,10 @@ bool gui_init()
         gui.app.width, gui.app.height,
         SDL_WINDOW_SHOWN
     );
-    if (gui.app.window == NULL)
+    if (gui.app.window == NULL) {
+        puts("Failed to create window");
         return false;
-
-    gui.style.font = TTF_OpenFont("JetBrainsMono-Regular.ttf", 13);
-    if (gui.style.font == NULL)
-        return false;
+    }
 
     gui.app.is_running = true;
     return true;
@@ -67,7 +160,7 @@ void gui_halt()
     gui.app.is_running = false;
 
     SDL_DestroyWindow(gui.app.window);
-    TTF_CloseFont(gui.style.font);
+    TTF_CloseFont(gui.style.text._font);
 
     TTF_Quit();
     SDL_Quit();
@@ -88,13 +181,19 @@ int gui_height()
     return gui.app.height;
 }
 
-void gui_reset_surface()
+void gui_clear()
 {
+    reset_text();
+
     gui.app.surface = SDL_GetWindowSurface(gui.app.window);
+
+    gui.style.display = (struct gui_display_t)GUI_DISPLAY_DEFAULT;
+    gui.style.display.frame = (SDL_Rect){0, 0, gui_width(), gui_height()};
+
     SDL_FillRect(gui.app.surface, NULL, 0xffffff);
 }
 
-void gui_handle_events()
+void gui_poll_events()
 {
     SDL_Event e;
 
@@ -140,19 +239,27 @@ void gui_update()
     SDL_UpdateWindowSurface(gui.app.window);
 }
 
-// Helper functions for widgets
-bool gui_regionhit(int x, int y, int w, int h)
+void gui_style_text_size(int size)
 {
-    if (gui.mouse.x < x ||
-        gui.mouse.y < y ||
-        gui.mouse.x >= x + w ||
-        gui.mouse.y >= y + h)
-        return false;
-    return true;
+    if (gui.style.text._font)
+        TTF_CloseFont(gui.style.text._font);
+
+    gui.style.text.size = size;
+    gui.style.text._font = TTF_OpenFont(
+        gui.style.text.family,
+        gui.style.text.size
+    );
 }
-float p5map(float n, float start1, float stop1, float start2, float stop2)
+
+void gui_style_display(char t)
 {
-    return ((n - start1) / (stop1 - start1)) * (stop2 - start2) + start2;
+    gui.style.display.type = t;
+}
+
+void gui_style_position(int x, int y)
+{
+    gui.style.display.position.x = x;
+    gui.style.display.position.y = y;
 }
 
 bool _gui_button(int id, char *s, int x, int y)
@@ -171,18 +278,18 @@ bool _gui_button(int id, char *s, int x, int y)
     ss[si] = '\0';
 
     int w, h;
-    TTF_SizeText(gui.style.font, ss, &w, &h);
-    bool regionhit = gui_regionhit(x, y, w + padding * 2, h + padding * 2);
+    TTF_SizeText(gui.style.text._font, ss, &w, &h);
+    bool hovered = region_hit(w + padding * 2, h + padding * 2);
 
     // Hot
-    if (regionhit) {
+    if (hovered) {
         bg = 0x00bfff;
         clr = (SDL_Color){255, 255, 255};
 
         if (gui.mouse.is_down && gui.state.active_item == 0)
             gui.state.active_item = id;
     }
-    else if (!regionhit && gui.state.active_item == id)
+    else if (!hovered && gui.state.active_item == id)
         gui.state.active_item = 0;
 
     // Clicked
@@ -192,7 +299,7 @@ bool _gui_button(int id, char *s, int x, int y)
     }
 
     // Render
-    SDL_Surface *text = TTF_RenderText_Blended(gui.style.font, ss, clr);
+    SDL_Surface *text = TTF_RenderText_Blended(gui.style.text._font, ss, clr);
     SDL_Rect rect = {x, y, w + padding * 2, h + padding * 2};
     SDL_FillRect(gui.app.surface, &rect, bg);
 
@@ -203,36 +310,35 @@ bool _gui_button(int id, char *s, int x, int y)
     return ret;
 }
 
-void _gui_text(int id, char align, char *s, int x, int y, int w , int h)
+void _gui_text(int id, const char *s)
 {
     // Render to surface
-    SDL_Surface *surface = TTF_RenderText_Blended(gui.style.font, s, gui.style.color);
-
-    // Alignment
-    SDL_Rect temp = {
-        x,
-        y + (h - surface->h) / 2,
-        w,
-        h,
-    };
-
-    if (align == 'c')
-        temp.x += (w - surface->w) / 2;
-    else if (align == 'r')
-        temp.x += w - surface->w;
+    SDL_Surface *surface = TTF_RenderText_Blended(
+        gui.style.text._font, s, gui.style.text.color
+    );
 
     // Blit to screen
-    SDL_BlitSurface(surface, NULL, gui.app.surface, &temp);
+    SDL_BlitSurface(surface, NULL, gui.app.surface, &gui.style.display.frame);
     SDL_FreeSurface(surface);
+
+    // Positioning
+    push_frame(surface->w, surface->h);
+    reset_text();
 }
 
-void _gui_vslider(int id, int x, int y, int w, int h, float *p, float mn, float mx)
+void _gui_vslider(int id, int h, float *p, float mn, float mx)
 {
+    static const int w = 15;
     Uint32 color = 0xaaaaaa;
-    bool regionhit = gui_regionhit(x, y, w, h);
+
+    bool hovered = region_hit(w, h);
+    SDL_Rect xny =
+        gui.style.display.type == 'f'
+            ? gui.style.display.frame
+            : gui.style.display.position;
 
     // Hot
-    if (regionhit) {
+    if (hovered) {
         color = 0x00bfff;
 
         if (gui.mouse.is_down && gui.state.active_item == 0)
@@ -241,7 +347,7 @@ void _gui_vslider(int id, int x, int y, int w, int h, float *p, float mn, float 
 
     // Clicked
     if (gui.state.active_item == id && gui.mouse.is_down) {
-        int pos = gui.mouse.y - y - w / 2;
+        int pos = gui.mouse.y - xny.y - w / 2;
 
         if (pos < 0) pos = 0;
         else if (pos > h - w) pos = h - w;
@@ -252,22 +358,33 @@ void _gui_vslider(int id, int x, int y, int w, int h, float *p, float mn, float 
         gui.state.active_item = 0;
 
     // Render
-    SDL_Rect temp = {x, y, w, h};
-    SDL_FillRect(gui.app.surface, &temp, 0xcecece);
+    xny.w = w;
+    xny.h = h;
+    SDL_FillRect(gui.app.surface, &xny, 0xcecece);
 
-    temp.y = p5map(*p, mn, mx, 0, h - w) + y;
-    temp.w = w;
-    temp.h = w;
-    SDL_FillRect(gui.app.surface, &temp, color);
+    xny.y += p5map(*p, mn, mx, 0, h - w);
+    xny.w = w;
+    xny.h = w;
+    SDL_FillRect(gui.app.surface, &xny, color);
+
+    // Positioning
+    push_frame(w, h);
+    reset_display();
 }
 
-void _gui_hslider(int id, int x, int y, int w, int h, float *p, float mn, float mx)
+void _gui_hslider(int id, int w, float *p, float mn, float mx)
 {
+    static const int h = 15;
     Uint32 color = 0xaaaaaa;
-    bool regionhit = gui_regionhit(x, y, w, h);
+
+    bool hovered = region_hit(w, h);
+    SDL_Rect xny =
+        gui.style.display.type == 'f'
+            ? gui.style.display.frame
+            : gui.style.display.position;
 
     // Hot
-    if (regionhit) {
+    if (hovered) {
         color = 0x00bfff;
 
         if (gui.mouse.is_down && gui.state.active_item == 0)
@@ -276,7 +393,7 @@ void _gui_hslider(int id, int x, int y, int w, int h, float *p, float mn, float 
 
     // Clicked
     if (gui.state.active_item == id && gui.mouse.is_down) {
-        int pos = gui.mouse.x - x - h / 2;
+        int pos = gui.mouse.x - xny.x - h / 2;
 
         if (pos < 0) pos = 0;
         else if (pos > w - h) pos = w - h;
@@ -287,21 +404,26 @@ void _gui_hslider(int id, int x, int y, int w, int h, float *p, float mn, float 
         gui.state.active_item = 0;
 
     // Render
-    SDL_Rect temp = {x, y, w, h};
-    SDL_FillRect(gui.app.surface, &temp, 0xcecece);
+    xny.w = w;
+    xny.h = h;
+    SDL_FillRect(gui.app.surface, &xny, 0xcecece);
 
-    temp.x = p5map(*p, mn, mx, 0, w - h) + x;
-    temp.w = h;
-    temp.h = h;
-    SDL_FillRect(gui.app.surface, &temp, color);
+    xny.x += p5map(*p, mn, mx, 0, w - h);
+    xny.w = h;
+    xny.h = h;
+    SDL_FillRect(gui.app.surface, &xny, color);
+
+    // Positioning
+    push_frame(w, h);
+    reset_display();
 }
 
 void _gui_vborder(int id, int *x, int y, int h, int mn, int mx)
 {
     Uint32 color = 0xcecece;
-    bool regionhit = gui_regionhit(*x, y, 5, h);
+    bool hovered = region_hit(5, h);
 
-    if (regionhit) {
+    if (hovered) {
         if (gui.mouse.is_down)
             gui.state.active_item = id;
     }

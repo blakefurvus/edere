@@ -1,6 +1,10 @@
 #ifndef GUI_H
 #define GUI_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * LIBRARIES
  */
@@ -42,9 +46,18 @@ int gui_width();
 int gui_height();
 
 // Events
-void gui_reset_surface();
-void gui_handle_events();
+void gui_clear();
+void gui_poll_events();
 void gui_update();
+
+
+/*
+ * STYLING
+ */
+
+void gui_style_text_size(int size);
+void gui_style_display(char t);
+void gui_style_position(int x, int y);
 
 
 /*
@@ -55,20 +68,26 @@ void gui_update();
 bool _gui_button(int id, char *s, int x, int y);
 
 #define gui_text(...) _gui_text(GEN_ID, __VA_ARGS__)
-void _gui_text(int id, char align, char *s, int x, int y, int w, int h);
+void _gui_text(int id, const char *s);
 
 #define gui_vslider(...) _gui_vslider(GEN_ID, __VA_ARGS__)
-void _gui_vslider(int id, int x, int y, int w, int h, float *p, float mn, float mx);
+void _gui_vslider(int id, int h, float *p, float mn, float mx);
 
 #define gui_hslider(...) _gui_hslider(GEN_ID, __VA_ARGS__)
-void _gui_hslider(int id, int x, int y, int w, int h, float *p, float mn, float mx);
+void _gui_hslider(int id, int w, float *p, float mn, float mx);
 
 #define gui_vborder(...) _gui_vborder(GEN_ID, __VA_ARGS__)
 void _gui_vborder(int id, int *x, int y, int h, int mn, int mx);
 
+
 // Implementation
 #ifdef GUI_IMPLEMENTATION
 #include "gui.c"
+#endif
+
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif
