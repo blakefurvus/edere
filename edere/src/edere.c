@@ -36,7 +36,7 @@ int main()
     assert(gui_init());
 
     // State
-    float value = 13;
+    float value = 20;
 
     while (gui_running()) {
         gui_clear();
@@ -49,18 +49,22 @@ int main()
         // }
 
         gui_style_display('x');
+        if (gui_button("Click me to exit!"))
+            break;
+
+        gui_style_display('x');
         gui_style_position(gui_width() - 50, gui_height() / 4);
         gui_vslider(gui_height() / 2, &value, 0, 100);
 
+        gui_style_justify_content('c');
+        gui_style_align_items('c');
         gui_style_text_size((int)value);
         gui_text("Hello World!");
 
-        gui_style_text_size((int)value / 2);
-        gui_text("Hi World!");
+        // gui_style_text_size((int)value / 2);
+        // gui_text("Hi World!");
 
         gui_poll_events();
         gui_update();
     }
-
-    gui_halt();
 }

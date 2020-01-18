@@ -58,17 +58,19 @@ void gui_update();
 void gui_style_text_size(int size);
 void gui_style_display(char t);
 void gui_style_position(int x, int y);
+void gui_style_justify_content(char v);
+void gui_style_align_items(char v);
 
 
 /*
  * WIDGETS
  */
 
-#define gui_button(...) _gui_button(GEN_ID, __VA_ARGS__)
-bool _gui_button(int id, char *s, int x, int y);
-
 #define gui_text(...) _gui_text(GEN_ID, __VA_ARGS__)
 void _gui_text(int id, const char *s);
+
+#define gui_button(...) _gui_button(GEN_ID, __VA_ARGS__)
+bool _gui_button(int id, char *s);
 
 #define gui_vslider(...) _gui_vslider(GEN_ID, __VA_ARGS__)
 void _gui_vslider(int id, int h, float *p, float mn, float mx);
